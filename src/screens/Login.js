@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { FaShoppingCart, FaBox, FaTruck, FaShoppingBag } from 'react-icons/fa';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 const float = keyframes`
   0% { transform: translateY(0px) rotate(0deg); }
@@ -146,6 +146,38 @@ const FloatingIcon = styled.div`
   }
 `;
 
+const SignupLink = styled(Link)`
+  display: block;
+  text-align: center;
+  margin-top: 1.5rem;
+  color: #4299e1;
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+
+  &:hover {
+    color: #3182ce;
+    text-decoration: underline;
+  }
+`;
+
+const Divider = styled.div`
+  display: flex;
+  align-items: center;
+  margin: 1.5rem 0;
+  color: #a0aec0;
+  font-size: 0.9rem;
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #cbd5e0;
+    margin: 0 1rem;
+  }
+`;
+
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -204,6 +236,10 @@ export default function Login() {
                     {inputError && <p style={{ color: 'red' }}>{inputError}</p>}
                     <Button type="submit" onClick={handleToken}>Sign In</Button>
                 </form>
+                <Divider>or</Divider>
+                <SignupLink to="/signup">
+                    Don't have an account? Sign up here
+                </SignupLink>
             </LoginCard>
         </Container>
     );

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import styled, { keyframes } from 'styled-components';
+import React, { useState, useEffect } from 'react';
+import styled, { keyframes, css } from 'styled-components';
 import { useTheme } from '../context/ThemeContext';
 import { FaShoppingCart, FaTrash, FaPlus, FaMinus, FaBox, 
-         FaTruck, FaMoneyBillWave, FaArrowRight, FaShoppingBag } from 'react-icons/fa';
+         FaTruck, FaMoneyBillWave, FaArrowRight, FaShoppingBag,
+         FaArrowLeft, FaHeart, FaShare } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
 
 const float = keyframes`
     0% { transform: translateY(0px) rotate(0deg); }
@@ -15,6 +17,11 @@ const pulse = keyframes`
     0% { transform: scale(1); opacity: 0.5; }
     50% { transform: scale(1.05); opacity: 0.8; }
     100% { transform: scale(1); opacity: 0.5; }
+`;
+
+const spin = keyframes`
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 `;
 
 const FloatingIcon = styled.div`
@@ -51,7 +58,7 @@ const Container = styled.div`
     transition: all 0.3s ease;
 
     @media (max-width: 768px) {
-        padding: 1rem;
+        padding: 1rem 0.5rem;
     }
 `;
 
@@ -62,11 +69,35 @@ const CartContainer = styled.div`
     z-index: 1;
 `;
 
+const CartContent = styled.div`
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 2rem;
+    align-items: start;
+
+    @media (max-width: 1024px) {
+        grid-template-columns: 1fr 280px;
+        gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+`;
+
+const CartItemsContainer = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+`;
+
 const CartHeader = styled.div`
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
+    padding: 0 1rem;
 
     h1 {
         font-size: 2rem;
@@ -78,38 +109,85 @@ const CartHeader = styled.div`
         svg {
             color: ${props => props.theme.primary};
         }
+
+        @media (max-width: 768px) {
+            font-size: 1.5rem;
+        }
+    }
+
+    @media (max-width: 768px) {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1rem;
     }
 `;
 
-const CartCard = styled.div`
-    background: ${props => props.theme.cardBg};
-    border-radius: 15px;
-    padding: 1.5rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+const EmptyCartMessage = styled.div`
+    text-align: center;
+    padding: 3rem 1rem;
+    
+    svg {
+        font-size: 4rem;
+        color: ${props => props.theme.primary}40;
+        margin-bottom: 1rem;
+    }
+
+    h2 {
+        margin: 1rem 0;
+        color: ${props => props.theme.text};
+    }
+
+    p {
+        color: ${props => props.theme.text}99;
+        margin-bottom: 2rem;
+    }
+`;
+
+const ContinueShoppingButton = styled.button`
+    background: none;
+    border: 2px solid ${props => props.theme.primary};
+    color: ${props => props.theme.primary};
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem auto;
     transition: all 0.3s ease;
 
     &:hover {
+        background: ${props => props.theme.primary}10;
         transform: translateY(-2px);
-        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
     }
 `;
 
 const CartItem = styled.div`
     display: grid;
     grid-template-columns: 100px 1fr auto;
-    gap: 1rem;
+    gap: 1.5rem;
     align-items: center;
-    padding: 1rem 0;
-    border-bottom: 1px solid ${props => props.theme.text}20;
+    padding: 1.5rem;
+    border-bottom: 1px solid ${props => props.theme.text}10;
+    background: ${props => props.theme.cardBg};
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
 
-    &:last-child {
-        border-bottom: none;
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     @media (max-width: 768px) {
         grid-template-columns: 80px 1fr;
-        gap: 0.5rem;
+        grid-template-areas: 
+            "image info"
+            "image actions";
+        padding: 1rem;
+        gap: 0.75rem;
     }
 `;
 
@@ -129,6 +207,7 @@ const ItemImage = styled.div`
     @media (max-width: 768px) {
         width: 80px;
         height: 80px;
+        grid-area: image;
     }
 `;
 
@@ -136,17 +215,43 @@ const ItemInfo = styled.div`
     h3 {
         margin: 0 0 0.5rem 0;
         color: ${props => props.theme.text};
+        font-size: 1.1rem;
     }
 
-    p {
-        margin: 0;
-        color: ${props => props.theme.text}99;
+    .price {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: ${props => props.theme.primary};
+        margin: 0.5rem 0;
+    }
+
+    .stock {
         font-size: 0.9rem;
+        color: #48bb78;
+    }
+
+    .category {
+        font-size: 0.85rem;
+        color: ${props => props.theme.text}80;
+        margin-top: 0.5rem;
     }
 
     @media (max-width: 768px) {
-        grid-column: 1 / -1;
-        margin-top: 0.5rem;
+        grid-area: info;
+
+        h3 {
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .price {
+            font-size: 1.1rem;
+            margin: 0.25rem 0;
+        }
+
+        .stock, .category {
+            font-size: 0.8rem;
+        }
     }
 `;
 
@@ -154,11 +259,12 @@ const ItemActions = styled.div`
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex-wrap: wrap;
 
     @media (max-width: 768px) {
-        grid-column: 1 / -1;
-        justify-content: space-between;
-        margin-top: 1rem;
+        grid-area: actions;
+        gap: 0.75rem;
+        justify-content: flex-start;
     }
 `;
 
@@ -167,7 +273,7 @@ const QuantityControl = styled.div`
     align-items: center;
     gap: 0.5rem;
     background: ${props => props.theme.background};
-    padding: 0.5rem;
+    padding: 0.25rem;
     border-radius: 8px;
 
     button {
@@ -175,20 +281,72 @@ const QuantityControl = styled.div`
         border: none;
         color: ${props => props.theme.primary};
         cursor: pointer;
-        padding: 0.25rem;
+        width: 28px;
+        height: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.3s ease;
+        border-radius: 4px;
+        transition: all 0.2s ease;
 
         &:hover {
-            color: ${props => props.theme.secondary};
+            background: ${props => props.theme.primary}20;
+        }
+
+        &:disabled {
+            color: ${props => props.theme.text}40;
+            cursor: not-allowed;
         }
     }
 
     span {
         min-width: 30px;
         text-align: center;
+        font-weight: 500;
+    }
+
+    @media (max-width: 768px) {
+        button {
+            width: 24px;
+            height: 24px;
+        }
+
+        span {
+            min-width: 24px;
+            font-size: 0.9rem;
+        }
+    }
+`;
+
+const ActionButton = styled.button`
+    background: none;
+    border: none;
+    color: ${props => props.theme.text}80;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+
+    &:hover {
+        color: ${props => props.theme.primary};
+        background: ${props => props.theme.primary}10;
+    }
+
+    @media (max-width: 768px) {
+        padding: 0.4rem;
+        font-size: 0.85rem;
+
+        svg {
+            font-size: 0.9rem;
+        }
+
+        span {
+            display: none;
+        }
     }
 `;
 
@@ -209,177 +367,291 @@ const DeleteButton = styled.button`
     }
 `;
 
-const CartSummary = styled.div`
-    background: ${props => props.theme.cardBg};
-    border-radius: 15px;
-    padding: 1.5rem;
-    margin-top: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-`;
-
-const CheckoutButton = styled.button`
-    background: ${props => props.theme.primary};
-    color: white;
-    border: none;
-    padding: 1rem 2rem;
-    border-radius: 8px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
+const LoadingSpinner = styled.div`
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    width: 100%;
     justify-content: center;
-
-    &:hover {
-        transform: translateY(-2px);
-        background: ${props => props.theme.secondary};
+    padding: 2rem;
+    
+    &:before {
+        content: '';
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        border: 3px solid ${props => props.theme.text}20;
+        border-top-color: ${props => props.theme.primary};
+        animation: ${spin} 1s linear infinite;
+        margin-bottom: 1rem;
     }
 
-    svg {
-        font-size: 1.2rem;
+    &:after {
+        content: 'Loading your cart...';
+        color: ${props => props.theme.text}80;
+        font-size: 1rem;
+    }
+`;
+
+const CartSummary = styled.div`
+    background: ${props => props.theme.cardBg};
+    border-radius: 12px;
+    padding: 1.5rem;
+    height: fit-content;
+    position: sticky;
+    top: 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+    h2 {
+        margin: 0 0 1.5rem 0;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+
+        svg {
+            color: ${props => props.theme.primary};
+        }
     }
 
     @media (max-width: 768px) {
         position: fixed;
-        bottom: 1rem;
-        left: 1rem;
-        right: 1rem;
-        width: calc(100% - 2rem);
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: auto;
+        border-radius: 12px 12px 0 0;
+        padding: 1rem;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
         z-index: 100;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        background: ${props => props.theme.background};
+
+        h2 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+        }
+    }
+`;
+
+const SummaryItem = styled.div`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    color: ${props => props.theme.text}99;
+    font-size: 0.95rem;
+
+    &.total {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid ${props => props.theme.text}20;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: ${props => props.theme.text};
+    }
+
+    @media (max-width: 768px) {
+        font-size: 0.9rem;
+        margin-bottom: 0.75rem;
+
+        &.total {
+            margin-top: 1rem;
+            padding-top: 0.75rem;
+            font-size: 1rem;
+        }
+    }
+`;
+
+const CheckoutButton = styled.button`
+    width: 100%;
+    background: ${props => props.theme.primary};
+    color: white;
+    border: none;
+    padding: 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    transition: all 0.3s ease;
+
+    &:hover {
+        background: ${props => props.theme.primary}dd;
+        transform: translateY(-2px);
+    }
+
+    @media (max-width: 768px) {
+        padding: 0.75rem;
+        margin-top: 1rem;
+        font-size: 0.95rem;
     }
 `;
 
 export default function Cart() {
     const { theme } = useTheme();
     const navigate = useNavigate();
-    const [cartItems, setCartItems] = useState([
-        {
-            id: 1,
-            name: 'Wireless Earbuds',
-            price: 1299,
-            quantity: 1,
-            image: 'https://via.placeholder.com/100'
-        },
-        {
-            id: 2,
-            name: 'Smart Watch',
-            price: 2499,
-            quantity: 2,
-            image: 'https://via.placeholder.com/100'
-        },
-        {
-            id: 3,
-            name: 'Bluetooth Speaker',
-            price: 1999,
-            quantity: 1,
-            image: 'https://via.placeholder.com/100'
+    const [isLoading, setIsLoading] = useState(true);
+    const { cart, removeFromCart, updateQuantity } = useCart();
+    
+    useEffect(() => {
+        // Simulate loading
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    const shipping = cart.length > 0 ? 99 : 0;
+    const tax = subtotal * 0.18;
+
+    const handleUpdateQuantity = (itemId, newQuantity) => {
+        if (newQuantity >= 1 && newQuantity <= 10) {
+            updateQuantity(itemId, newQuantity);
         }
-    ]);
-
-    const updateQuantity = (id, change) => {
-        setCartItems(items =>
-            items.map(item =>
-                item.id === id
-                    ? { ...item, quantity: Math.max(1, item.quantity + change) }
-                    : item
-            )
-        );
     };
 
-    const removeItem = (id) => {
-        setCartItems(items => items.filter(item => item.id !== id));
+    const handleRemoveItem = (itemId) => {
+        removeFromCart(itemId);
     };
-
-    const calculateSubtotal = () => {
-        return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    };
-
-    const shipping = 99;
-    const tax = calculateSubtotal() * 0.18; // 18% tax
 
     const handleCheckout = () => {
-        if (cartItems.length === 0) {
-            alert('Your cart is empty!');
-            return;
-        }
-        navigate('/orders');
+        navigate('/checkout');
     };
+
+    const handleContinueShopping = () => {
+        navigate('/');
+    };
+
+    if (isLoading) {
+        return (
+            <Container theme={theme}>
+                <CartContainer>
+                    <CartHeader>
+                        <h1><FaShoppingCart /> Shopping Cart</h1>
+                    </CartHeader>
+                    <LoadingSpinner theme={theme} />
+                </CartContainer>
+            </Container>
+        );
+    }
+
+    if (cart.length === 0) {
+        return (
+            <Container theme={theme}>
+                <CartContainer>
+                    <CartHeader>
+                        <h1><FaShoppingCart /> Shopping Cart</h1>
+                    </CartHeader>
+                    <EmptyCartMessage>
+                        <FaShoppingBag />
+                        <h2>Your cart is empty</h2>
+                        <p>Looks like you haven't added anything to your cart yet.</p>
+                        <ContinueShoppingButton 
+                            onClick={handleContinueShopping}
+                            theme={theme}
+                        >
+                            <FaArrowLeft /> Continue Shopping
+                        </ContinueShoppingButton>
+                    </EmptyCartMessage>
+                </CartContainer>
+            </Container>
+        );
+    }
 
     return (
         <Container theme={theme}>
-            {/* Background Animations */}
-            <FloatingIcon as={FaBox} size="4rem" left="5%" top="20%" duration="4s" theme={theme} />
-            <FloatingIcon as={FaTruck} size="3.5rem" left="85%" top="15%" duration="5s" delay="0.5s" theme={theme} />
-            <FloatingIcon as={FaMoneyBillWave} size="3rem" left="15%" top="60%" duration="4.5s" delay="1s" theme={theme} />
-            <FloatingIcon as={FaShoppingCart} size="3.5rem" left="75%" top="70%" duration="4s" delay="1.5s" theme={theme} />
-
-            <PulsingCircle size="200px" left="10%" top="30%" theme={theme} duration="4s" />
-            <PulsingCircle size="150px" left="80%" top="60%" theme={theme} duration="5s" delay="1s" />
-            <PulsingCircle size="180px" left="40%" top="80%" theme={theme} duration="4.5s" delay="2s" />
-
             <CartContainer>
-                <CartHeader theme={theme}>
-                    <h1>
-                        <FaShoppingCart /> Shopping Cart
-                    </h1>
-                    <span>{cartItems.length} items</span>
+                <CartHeader>
+                    <h1><FaShoppingCart /> Shopping Cart</h1>
+                    <span>{cart.length} {cart.length === 1 ? 'item' : 'items'}</span>
                 </CartHeader>
 
-                <CartCard theme={theme}>
-                    {cartItems.map(item => (
-                        <CartItem key={item.id} theme={theme}>
-                            <ItemImage theme={theme}>
-                                <img src={item.image} alt={item.name} />
-                            </ItemImage>
-                            <ItemInfo theme={theme}>
-                                <h3>{item.name}</h3>
-                                <p>₹{item.price.toLocaleString()}</p>
-                            </ItemInfo>
-                            <ItemActions>
-                                <QuantityControl theme={theme}>
-                                    <button onClick={() => updateQuantity(item.id, -1)}>
-                                        <FaMinus />
-                                    </button>
-                                    <span>{item.quantity}</span>
-                                    <button onClick={() => updateQuantity(item.id, 1)}>
-                                        <FaPlus />
-                                    </button>
-                                </QuantityControl>
-                                <DeleteButton theme={theme} onClick={() => removeItem(item.id)}>
-                                    <FaTrash />
-                                </DeleteButton>
-                            </ItemActions>
-                        </CartItem>
-                    ))}
-                </CartCard>
+                <CartContent>
+                    <CartItemsContainer>
+                        {cart.map(item => (
+                            <CartItem key={item.id} theme={theme}>
+                                <ItemImage theme={theme}>
+                                    <img src={item.image} alt={item.name} />
+                                </ItemImage>
+                                
+                                <ItemInfo theme={theme}>
+                                    <h3>{item.name}</h3>
+                                    <div className="price">${item.price.toFixed(2)}</div>
+                                    <div className="stock">In Stock</div>
+                                    <div className="category">{item.category}</div>
+                                </ItemInfo>
 
-                <CartSummary theme={theme}>
-                    <h2>Order Summary</h2>
-                    <div className="summary-item">
-                        <span>Subtotal</span>
-                        <span>₹{calculateSubtotal().toLocaleString()}</span>
-                    </div>
-                    <div className="summary-item">
-                        <span>Shipping</span>
-                        <span>₹{shipping}</span>
-                    </div>
-                    <div className="summary-item total">
-                        <span>Total</span>
-                        <span>₹{(calculateSubtotal() + shipping + tax).toLocaleString()}</span>
-                    </div>
-                    <CheckoutButton 
-                        theme={theme}
-                        onClick={handleCheckout}
-                        disabled={cartItems.length === 0}
-                    >
-                        <FaShoppingBag /> 
-                        {cartItems.length === 0 ? 'Cart is Empty' : 'Proceed to Checkout'}
-                    </CheckoutButton>
-                </CartSummary>
+                                <ItemActions>
+                                    <QuantityControl theme={theme}>
+                                        <button 
+                                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                                            disabled={item.quantity <= 1}
+                                        >
+                                            <FaMinus />
+                                        </button>
+                                        <span>{item.quantity}</span>
+                                        <button 
+                                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                                            disabled={item.quantity >= 10}
+                                        >
+                                            <FaPlus />
+                                        </button>
+                                    </QuantityControl>
+                                    <ActionButton 
+                                        onClick={() => {}} 
+                                        theme={theme}
+                                    >
+                                        <FaHeart />
+                                        <span>Save</span>
+                                    </ActionButton>
+                                    <ActionButton 
+                                        onClick={() => {}} 
+                                        theme={theme}
+                                    >
+                                        <FaShare />
+                                        <span>Share</span>
+                                    </ActionButton>
+                                    <ActionButton 
+                                        onClick={() => handleRemoveItem(item.id)} 
+                                        theme={theme}
+                                    >
+                                        <FaTrash />
+                                        <span>Remove</span>
+                                    </ActionButton>
+                                </ItemActions>
+                            </CartItem>
+                        ))}
+                    </CartItemsContainer>
+
+                    <CartSummary theme={theme}>
+                        <h2>Order Summary</h2>
+                        <SummaryItem>
+                            <span>Subtotal ({cart.length} items)</span>
+                            <span>${subtotal.toFixed(2)}</span>
+                        </SummaryItem>
+                        <SummaryItem>
+                            <span>Shipping</span>
+                            <span>${shipping.toFixed(2)}</span>
+                        </SummaryItem>
+                        <SummaryItem>
+                            <span>Tax (18%)</span>
+                            <span>${tax.toFixed(2)}</span>
+                        </SummaryItem>
+                        <SummaryItem className="total">
+                            <span>Total</span>
+                            <span>${(subtotal + shipping + tax).toFixed(2)}</span>
+                        </SummaryItem>
+                        <CheckoutButton 
+                            theme={theme}
+                            onClick={handleCheckout}
+                        >
+                            <FaArrowRight /> Proceed to Checkout
+                        </CheckoutButton>
+                    </CartSummary>
+                </CartContent>
             </CartContainer>
         </Container>
     );

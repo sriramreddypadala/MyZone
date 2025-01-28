@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { FaUser, FaEnvelope, FaPhone, FaPalette, FaCog, FaCamera, 
-         FaMoon, FaSun, FaWater, FaMountain, FaCrown } from 'react-icons/fa';
+         FaMoon, FaSun, FaWater, FaMountain, FaCrown, FaTimes } from 'react-icons/fa';
 import { useTheme } from '../context/ThemeContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -324,6 +324,47 @@ const SubscriptionGrid = styled.div`
     margin-top: 1rem;
 `;
 
+const ExitButton = styled.button`
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: transparent;
+    border: none;
+    color: ${props => props.theme.text};
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+
+    &:hover {
+        background: ${props => props.theme.primary}20;
+        color: ${props => props.theme.primary};
+        transform: translateY(-2px);
+    }
+
+    svg {
+        font-size: 1.2rem;
+    }
+
+    span {
+        font-size: 1rem;
+        font-weight: 500;
+    }
+
+    @media (max-width: 768px) {
+        top: 0.5rem;
+        right: 0.5rem;
+        
+        span {
+            display: none;
+        }
+    }
+`;
+
 export default function Profile() {
     const { theme, currentTheme, setCurrentTheme } = useTheme();
     const navigate = useNavigate();
@@ -421,6 +462,10 @@ export default function Profile() {
         razorpay.open();
     };
 
+    const handleExitClick = () => {
+        navigate('/');
+    };
+
     return (
         <Container theme={theme}>
             {/* Background Animations */}
@@ -434,6 +479,11 @@ export default function Profile() {
             <PulsingCircle size="180px" left="40%" top="80%" theme={theme} duration="4.5s" delay="2s" />
 
             <ProfileCard theme={theme}>
+                <ExitButton onClick={handleExitClick} theme={theme}>
+                    <FaTimes />
+                    <span>Exit to Dashboard</span>
+                </ExitButton>
+
                 <ProfileHeader>
                     <ProfileImage theme={theme}>
                         <img src={userData.image} alt="Profile" />

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import styled, { keyframes } from 'styled-components';
+import React, { useState, useEffect } from 'react';
+import styled, { keyframes, css } from 'styled-components';
 import { FaShoppingCart, FaHeart, FaShare, FaStar, FaTruck, FaShieldAlt, 
-         FaUndo, FaTag, FaCreditCard, FaBoxOpen, FaFilter, FaSort } from 'react-icons/fa';
+         FaUndo, FaTag, FaCreditCard, FaBoxOpen, FaFilter, FaSort,
+         FaSearch, FaEye, FaTimes } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 
@@ -20,6 +21,16 @@ const pulse = keyframes`
   0% { transform: scale(1); opacity: 0.8; }
   50% { transform: scale(1.05); opacity: 0.5; }
   100% { transform: scale(1); opacity: 0.8; }
+`;
+
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const scaleIn = keyframes`
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 `;
 
 const Container = styled.div`
@@ -115,10 +126,12 @@ const ProductGrid = styled.div`
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 2rem;
   margin-top: 2rem;
+  padding: 1rem;
 
   @media (max-width: 768px) {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 1rem;
+    padding: 0.5rem;
   }
 `;
 
@@ -127,18 +140,20 @@ const ProductCard = styled.div`
   border-radius: 15px;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s ease;
+  transition: all 0.3s ease;
+  position: relative;
 
   &:hover {
     transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
   }
 `;
 
 const ProductImage = styled.div`
   position: relative;
   width: 100%;
-  padding-top: 100%; /* 1:1 Aspect Ratio */
-  background: #f0f2f5;
+  padding-top: 100%;
+  background: ${props => props.theme.background};
   overflow: hidden;
 
   img {
@@ -148,7 +163,7 @@ const ProductImage = styled.div`
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.3s ease;
+    transition: transform 0.5s ease;
   }
 
   &:hover img {
@@ -186,28 +201,61 @@ const ProductInfo = styled.div`
     margin: 0;
     font-size: 1.2rem;
     margin-bottom: 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .price {
     color: ${props => props.theme.primary};
     font-weight: bold;
     font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
   }
 
   .original-price {
     color: ${props => props.theme.text}60;
     text-decoration: line-through;
     font-size: 1rem;
-    margin-left: 0.5rem;
   }
 
   .discount {
-    background: ${props => props.theme.primary};
-    color: white;
+    background: ${props => props.theme.primary}20;
+    color: ${props => props.theme.primary};
     padding: 0.25rem 0.5rem;
     border-radius: 5px;
     font-size: 0.8rem;
-    margin-left: 0.5rem;
+    font-weight: bold;
+  }
+
+  .description {
+    color: ${props => props.theme.text}99;
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+
+    span {
+      color: ${props => props.theme.text};
+      font-weight: 500;
+    }
+
+    .reviews {
+      color: ${props => props.theme.text}80;
+      font-size: 0.9rem;
+    }
   }
 `;
 
@@ -277,21 +325,167 @@ const PulsingCircle = styled.div`
   z-index: 0;
 `;
 
+const Modal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  opacity: 0;
+  animation: ${fadeIn} 0.3s ease forwards;
+`;
+
+const ModalContent = styled.div`
+  background: ${props => props.theme.cardBg};
+  padding: 2rem;
+  border-radius: 15px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  opacity: 0;
+  animation: ${scaleIn} 0.3s ease forwards;
+  animation-delay: 0.1s;
+`;
+
+const CloseButton = styled.button`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: ${props => props.theme.text};
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: ${props => props.theme.text}20;
+  }
+`;
+
+const CategoryBar = styled.div`
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  padding: 1rem 0;
+  margin: 1rem 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+const CategoryChip = styled.button`
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 20px;
+  background: ${props => props.active ? props.theme.primary : props.theme.cardBg};
+  color: ${props => props.active ? 'white' : props.theme.text};
+  font-weight: ${props => props.active ? '600' : '500'};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+`;
+
+const SearchBar = styled.div`
+  display: flex;
+  align-items: center;
+  background: ${props => props.theme.cardBg};
+  border-radius: 10px;
+  padding: 0.5rem 1rem;
+  margin: 1rem 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+  input {
+    flex: 1;
+    border: none;
+    background: none;
+    color: ${props => props.theme.text};
+    padding: 0.5rem;
+    font-size: 1rem;
+    outline: none;
+
+    &::placeholder {
+      color: ${props => props.theme.text}60;
+    }
+  }
+
+  svg {
+    color: ${props => props.theme.text}60;
+    margin-right: 0.5rem;
+  }
+`;
+
+const QuickViewButton = styled(ActionButton)`
+  background: ${props => props.theme.cardBg};
+  color: ${props => props.theme.text};
+  border: 2px solid ${props => props.theme.primary};
+  margin-top: 0.5rem;
+
+  &:hover {
+    background: ${props => props.theme.primary}20;
+  }
+`;
+
+const LoadingSpinner = styled.div`
+  width: 100%;
+  height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: ${props => props.theme.primary};
+  font-size: 1.2rem;
+  animation: ${pulse} 2s infinite;
+`;
+
 export default function Product() {
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [wishlistedItems, setWishlistedItems] = useState(new Set());
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [quickViewProduct, setQuickViewProduct] = useState(null);
+
+  const categories = [
+    'All',
+    'Headphones',
+    'Gaming',
+    'Wireless',
+    'Professional',
+    'Budget',
+    'Premium'
+  ];
 
   const products = [
     {
       id: 1,
-      name: "Premium Wireless Headphones",
-      price: 299.99,
-      originalPrice: 399.99,
-      discount: 25,
+      name: "Apple AirPods Pro",
+      price: 249.99,
+      originalPrice: 279.99,
+      discount: 11,
       rating: 4.8,
-      reviews: 128,
-      image: "https://via.placeholder.com/300?text=Headphones"
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Apple+AirPods+Pro"
     },
     {
       id: 2,
@@ -342,8 +536,356 @@ export default function Product() {
       rating: 4.5,
       reviews: 145,
       image: "https://via.placeholder.com/300?text=Mouse"
+    },
+    {
+      id: 7,
+      name: "Sony WH-1000XM5",
+      price: 349.99,
+      originalPrice: 399.99,
+      discount: 13,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Sony+WH-1000XM5"
+    },
+    {
+      id: 8,
+      name: "Bose QuietComfort 45",
+      price: 299.99,
+      originalPrice: 349.99,
+      discount: 14,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Bose+QuietComfort+45"
+    },
+    {
+      id: 9,
+      name: "Sennheiser HD 400 Pro",
+      price: 199.99,
+      originalPrice: 249.99,
+      discount: 20,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Sennheiser+HD+400+Pro"
+    },
+    {
+      id: 10,
+      name: "Audio-Technica ATH-M50x",
+      price: 169.99,
+      originalPrice: 199.99,
+      discount: 15,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Audio-Technica+ATH-M50x"
+    },
+    {
+      id: 11,
+      name: "Beats Solo Pro",
+      price: 299.99,
+      originalPrice: 349.99,
+      discount: 14,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Beats+Solo+Pro"
+    },
+    {
+      id: 12,
+      name: "Jabra Elite 85t",
+      price: 199.99,
+      originalPrice: 249.99,
+      discount: 20,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Jabra+Elite+85t"
+    },
+    {
+      id: 13,
+      name: "Anker Soundcore Space Q45",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Anker+Soundcore+Space+Q45"
+    },
+    {
+      id: 14,
+      name: "Edifier H840",
+      price: 49.99,
+      originalPrice: 69.99,
+      discount: 29,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Edifier+H840"
+    },
+    {
+      id: 15,
+      name: "HyperX Cloud II",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=HyperX+Cloud+II"
+    },
+    {
+      id: 16,
+      name: "SteelSeries Arctis 7",
+      price: 149.99,
+      originalPrice: 179.99,
+      discount: 17,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=SteelSeries+Arctis+7"
+    },
+    {
+      id: 17,
+      name: "Turtle Beach Recon 200",
+      price: 59.99,
+      originalPrice: 79.99,
+      discount: 25,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Turtle+Beach+Recon+200"
+    },
+    {
+      id: 18,
+      name: "Corsair HS70 Wireless",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Corsair+HS70+Wireless"
+    },
+    {
+      id: 19,
+      name: "Logitech G Pro X",
+      price: 69.99,
+      originalPrice: 89.99,
+      discount: 22,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Logitech+G+Pro+X"
+    },
+    {
+      id: 20,
+      name: "Razer Kraken X",
+      price: 79.99,
+      originalPrice: 99.99,
+      discount: 20,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Razer+Kraken+X"
+    },
+    {
+      id: 21,
+      name: "Sennheiser GSP 670",
+      price: 349.99,
+      originalPrice: 399.99,
+      discount: 13,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Sennheiser+GSP+670"
+    },
+    {
+      id: 22,
+      name: "Audio-Technica ATH-G1",
+      price: 169.99,
+      originalPrice: 199.99,
+      discount: 15,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Audio-Technica+ATH-G1"
+    },
+    {
+      id: 23,
+      name: "HyperX Cloud Alpha",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=HyperX+Cloud+Alpha"
+    },
+    {
+      id: 24,
+      name: "SteelSeries Arctis 5",
+      price: 149.99,
+      originalPrice: 179.99,
+      discount: 17,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=SteelSeries+Arctis+5"
+    },
+    {
+      id: 25,
+      name: "Turtle Beach Recon 70",
+      price: 49.99,
+      originalPrice: 69.99,
+      discount: 29,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Turtle+Beach+Recon+70"
+    },
+    {
+      id: 26,
+      name: "Corsair HS60 Haptic",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Corsair+HS60+Haptic"
+    },
+    {
+      id: 27,
+      name: "Logitech G533",
+      price: 149.99,
+      originalPrice: 179.99,
+      discount: 17,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Logitech+G533"
+    },
+    {
+      id: 28,
+      name: "Razer Opus 7",
+      price: 199.99,
+      originalPrice: 249.99,
+      discount: 20,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Razer+Opus+7"
+    },
+    {
+      id: 29,
+      name: "Sennheiser HD 4.50 BT",
+      price: 199.99,
+      originalPrice: 249.99,
+      discount: 20,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Sennheiser+HD+4.50+BT"
+    },
+    {
+      id: 30,
+      name: "Audio-Technica ATH-M50xBT",
+      price: 169.99,
+      originalPrice: 199.99,
+      discount: 15,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Audio-Technica+ATH-M50xBT"
+    },
+    {
+      id: 31,
+      name: "Beats Solo Pro",
+      price: 299.99,
+      originalPrice: 349.99,
+      discount: 14,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Beats+Solo+Pro"
+    },
+    {
+      id: 32,
+      name: "Jabra Elite 85h",
+      price: 299.99,
+      originalPrice: 349.99,
+      discount: 14,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Jabra+Elite+85h"
+    },
+    {
+      id: 33,
+      name: "Anker Soundcore Space Q32",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Anker+Soundcore+Space+Q32"
+    },
+    {
+      id: 34,
+      name: "Edifier H840",
+      price: 49.99,
+      originalPrice: 69.99,
+      discount: 29,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Edifier+H840"
+    },
+    {
+      id: 35,
+      name: "HyperX Cloud II",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=HyperX+Cloud+II"
+    },
+    {
+      id: 36,
+      name: "SteelSeries Arctis 7",
+      price: 149.99,
+      originalPrice: 179.99,
+      discount: 17,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=SteelSeries+Arctis+7"
+    },
+    {
+      id: 37,
+      name: "Turtle Beach Recon 200",
+      price: 59.99,
+      originalPrice: 79.99,
+      discount: 25,
+      rating: 4.6,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Turtle+Beach+Recon+200"
+    },
+    {
+      id: 38,
+      name: "Corsair HS70 Wireless",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Corsair+HS70+Wireless"
+    },
+    {
+      id: 39,
+      name: "Logitech G Pro X",
+      price: 69.99,
+      originalPrice: 89.99,
+      discount: 22,
+      rating: 4.7,
+      reviews: 1203,
+      image: "https://via.placeholder.com/300?text=Logitech+G+Pro+X"
+    },
+    {
+      id: 40,
+      name: "Anker Soundcore Motion+",
+      price: 99.99,
+      originalPrice: 129.99,
+      discount: 23,
+      rating: 4.8,
+      reviews: 614,
+      image: "https://via.placeholder.com/300?text=Anker+Soundcore+Motion+Plus"
     }
   ];
+
+  useEffect(() => {
+    // Simulate loading
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const toggleWishlist = (productId) => {
     setWishlistedItems(prev => {
@@ -356,6 +898,13 @@ export default function Product() {
       return newSet;
     });
   };
+
+  const filteredProducts = products.filter(product => {
+    const matchesCategory = selectedCategory === 'All' || product.name.toLowerCase().includes(selectedCategory.toLowerCase());
+    const matchesSearch = searchQuery === '' || 
+      product.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <Container theme={theme}>
@@ -381,35 +930,112 @@ export default function Product() {
         </FilterSection>
       </Header>
 
-      <ProductGrid>
-        {products.map((product) => (
-          <ProductCard key={product.id} theme={theme}>
-            <ProductImage>
-              <img src={product.image} alt={product.name} />
-              <WishlistButton onClick={() => toggleWishlist(product.id)} theme={theme}>
-                <FaHeart color={wishlistedItems.has(product.id) ? theme.primary : theme.text + '80'} />
-              </WishlistButton>
-            </ProductImage>
-            <ProductInfo theme={theme}>
-              <h3>{product.name}</h3>
-              <Rating>
-                {[...Array(5)].map((_, i) => (
-                  <FaStar key={i} color={i < Math.floor(product.rating) ? theme.primary : theme.text + '20'} />
-                ))}
-                <span className="count">({product.reviews})</span>
-              </Rating>
-              <div>
-                <span className="price">${product.price}</span>
-                <span className="original-price">${product.originalPrice}</span>
-                <span className="discount">{product.discount}% OFF</span>
-              </div>
-              <ActionButton theme={theme}>
-                <FaShoppingCart /> Add to Cart
-              </ActionButton>
-            </ProductInfo>
-          </ProductCard>
+      <SearchBar theme={theme}>
+        <FaSearch />
+        <input 
+          type="text" 
+          placeholder="Search products..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </SearchBar>
+
+      <CategoryBar>
+        {categories.map(category => (
+          <CategoryChip
+            key={category}
+            active={selectedCategory === category}
+            onClick={() => setSelectedCategory(category)}
+            theme={theme}
+          >
+            {category}
+          </CategoryChip>
         ))}
+      </CategoryBar>
+
+      <ProductGrid>
+        {loading ? (
+          <LoadingSpinner theme={theme}>Loading products...</LoadingSpinner>
+        ) : (
+          filteredProducts.map((product) => (
+            <ProductCard key={product.id} theme={theme}>
+              <ProductImage>
+                <img src={product.image} alt={product.name} />
+                <WishlistButton onClick={() => toggleWishlist(product.id)} theme={theme}>
+                  <FaHeart color={wishlistedItems.has(product.id) ? theme.primary : theme.text + '80'} />
+                </WishlistButton>
+              </ProductImage>
+              <ProductInfo theme={theme}>
+                <h3>{product.name}</h3>
+                <Rating>
+                  {[...Array(5)].map((_, i) => (
+                    <FaStar key={i} color={i < Math.floor(product.rating) ? theme.primary : theme.text + '20'} />
+                  ))}
+                  <span className="count">({product.reviews})</span>
+                </Rating>
+                <div>
+                  <span className="price">${product.price}</span>
+                  <span className="original-price">${product.originalPrice}</span>
+                  <span className="discount">{product.discount}% OFF</span>
+                </div>
+                <ActionButton theme={theme}>
+                  <FaShoppingCart /> Add to Cart
+                </ActionButton>
+                <QuickViewButton theme={theme} onClick={() => setQuickViewProduct(product)}>
+                  <FaEye /> Quick View
+                </QuickViewButton>
+              </ProductInfo>
+            </ProductCard>
+          ))
+        )}
       </ProductGrid>
+
+      {quickViewProduct && (
+        <Modal onClick={() => setQuickViewProduct(null)}>
+          <ModalContent theme={theme} onClick={e => e.stopPropagation()}>
+            <CloseButton theme={theme} onClick={() => setQuickViewProduct(null)}>
+              <FaTimes />
+            </CloseButton>
+            <div style={{ display: 'flex', gap: '2rem' }}>
+              <div style={{ flex: '0 0 40%' }}>
+                <img 
+                  src={quickViewProduct.image} 
+                  alt={quickViewProduct.name} 
+                  style={{ width: '100%', borderRadius: '10px' }}
+                />
+              </div>
+              <div style={{ flex: '1' }}>
+                <h2>{quickViewProduct.name}</h2>
+                <Rating>
+                  {[...Array(5)].map((_, i) => (
+                    <FaStar key={i} color={i < Math.floor(quickViewProduct.rating) ? theme.primary : theme.text + '20'} />
+                  ))}
+                  <span className="count">({quickViewProduct.reviews} reviews)</span>
+                </Rating>
+                <div style={{ margin: '1rem 0' }}>
+                  <span className="price" style={{ fontSize: '2rem' }}>${quickViewProduct.price}</span>
+                  <span className="original-price" style={{ marginLeft: '1rem' }}>${quickViewProduct.originalPrice}</span>
+                  <span className="discount" style={{ marginLeft: '1rem' }}>{quickViewProduct.discount}% OFF</span>
+                </div>
+                <p style={{ color: theme.text + '99', marginBottom: '2rem' }}>
+                  Experience premium audio quality with this exceptional product. Features advanced noise cancellation,
+                  comfortable design, and long battery life for an immersive listening experience.
+                </p>
+                <ActionButton theme={theme} style={{ width: 'auto', marginRight: '1rem' }}>
+                  <FaShoppingCart /> Add to Cart
+                </ActionButton>
+                <WishlistButton 
+                  onClick={() => toggleWishlist(quickViewProduct.id)} 
+                  theme={theme}
+                  style={{ position: 'static', width: 'auto', padding: '0.75rem' }}
+                >
+                  <FaHeart color={wishlistedItems.has(quickViewProduct.id) ? theme.primary : theme.text + '80'} />
+                </WishlistButton>
+              </div>
+            </div>
+          </ModalContent>
+        </Modal>
+      )}
     </Container>
   );
 }
